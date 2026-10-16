@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#F7F3EB" />
+  <meta name="description" content="订醒 SubWake — 本地订阅审计台账，看清每月扣款与试用到期" />
+  <title>订醒 SubWake</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23F7F3EB'/%3E%3Crect x='6' y='8' width='20' height='16' rx='2.5' fill='none' stroke='%231C1917' stroke-width='1.6'/%3E%3Cpath d='M10 14h12M10 18h8' stroke='%235B7C6A' stroke-width='1.8' stroke-linecap='round'/%3E%3Ccircle cx='23' cy='22' r='5' fill='%23C45C4A'/%3E%3Cpath d='M23 19.5v3l2 1.2' stroke='%23F7F3EB' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="paper-grain" aria-hidden="true"></div>
+
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+            <rect x="5" y="7" width="18" height="15" rx="2.5" stroke="currentColor" stroke-width="1.7"/>
+            <path d="M9 13h12M9 17h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" opacity="0.55"/>
+            <circle cx="23" cy="22" r="5.2" fill="var(--coral)"/>
+            <path d="M23 19.6v3.1l2.1 1.2" stroke="#F7F3EB" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <h1>订醒 <em>SubWake</em></h1>
+          <p class="tagline">订阅审计台账 · 数据仅存本机</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="icon-btn" id="btnBackup" aria-label="备份与导入" title="备份 / 导入">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v12M8 11l4 4 4-4"/>
+            <path d="M4 19h16"/>
+          </svg>
+        </button>
+        <button type="button" class="btn-add" id="btnAdd" aria-label="添加订阅">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          <span>添加</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Dashboard -->
+    <section class="dash" aria-label="概览">
+      <div class="dash-card dash-main">
+        <span class="dash-label">本月花费 <small>（折算·估算）</small></span>
+        <div class="dash-value" id="statMonthly">¥0</div>
+        <span class="dash-sub" id="statYearly">年化约 ¥0</span>
+      </div>
+      <div class="dash-card">
+        <span class="dash-label">即将扣款</span>
+        <div class="dash-value sm" id="statSoon">0</div>
+        <span class="dash-sub">7 天内</span>
+      </div>
+      <div class="dash-card">
+        <span class="dash-label">试用将到期</span>
+        <div class="dash-value sm" id="statTrial">0</div>
+        <span class="dash-sub">需留意</span>
+      </div>
+    </section>
+
+    <p class="fx-hint" id="fxHint">汇总按 1 USD ≈ 7.2 CNY 估算，列表仍显示录入币种</p>
+
+    <!-- Demo banner -->
+    <div class="demo-banner" id="demoBanner" hidden>
+      <span>当前为示例数据，可直接编辑或清空后录入自己的订阅</span>
+      <button type="button" class="text-btn" id="btnClearDemo">清空示例</button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="filters">
+        <label class="sr-only" for="filterCat">分类</label>
+        <select id="filterCat" class="select">
+          <option value="all">全部分类</option>
+          <option value="流媒体">流媒体</option>
+          <option value="AI工具">AI工具</option>
+          <option value="云服务">云服务</option>
+          <option value="效率">效率</option>
+          <option value="健身">健身</option>
+          <option value="新闻">新闻</option>
+          <option value="其他">其他</option>
+        </select>
+        <label class="sr-only" for="filterStatus">状态</label>
+        <select id="filterStatus" class="select">
+          <option value="active">活跃</option>
+          <option value="cancelled">已取消</option>
+          <option value="all">全部状态</option>
+        </select>
+      </div>
+      <label class="sr-only" for="sortBy">排序</label>
+      <select id="sortBy" class="select">
+        <option value="next">按下次扣款</option>
+        <option value="amount">按金额</option>
+        <option value="name">按名称</option>
+      </select>
+    </div>
+
+    <!-- Savings simulator -->
+    <section class="sim-panel" id="simPanel" aria-labelledby="simTitle">
+      <button type="button" class="sim-toggle" id="simToggle" aria-expanded="false">
+        <span class="sim-toggle-left">
+          <span class="sim-dot" aria-hidden="true"></span>
+          <span id="simTitle">如果取消这些</span>
+        </span>
+        <span class="sim-toggle-right">
+          <span class="sim-save" id="simSave">可省 ¥0 / 月</span>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </span>
+      </button>
+      <div class="sim-body" id="simBody" hidden>
+        <p class="sim-hint">勾选下方订阅，估算若取消后每月能省多少（按折算月费）</p>
+        <div class="sim-result">
+          <span>模拟节省</span>
+          <strong id="simSaveBig">¥0</strong>
+          <span class="sim-unit">/ 月 · 估算</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- List -->
+    <section class="list-section" aria-labelledby="listTitle">
+      <div class="list-head">
+        <h2 id="listTitle">订阅清单</h2>
+        <span class="list-count" id="listCount">0 项</span>
+      </div>
+      <ul class="sub-list" id="subList" role="list"></ul>
+      <div class="empty" id="emptyState" hidden>
+        <div class="empty-icon" aria-hidden="true">
+          <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+            <rect x="6" y="8" width="28" height="24" rx="3" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
+            <path d="M12 16h16M12 22h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.35"/>
+          </svg>
+        </div>
+        <p>还没有订阅</p>
+        <p class="empty-sub">点右上角「添加」，或导入备份 JSON</p>
+        <button type="button" class="btn-secondary" id="btnEmptyAdd">添加第一条</button>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>数据仅存浏览器 localStorage · 可导出 JSON 备份</p>
+    </footer>
+  </div>
+
+  <!-- Form modal -->
+  <div class="overlay" id="formOverlay" hidden>
+    <div class="sheet" role="dialog" aria-labelledby="formTitle" aria-modal="true">
+      <div class="sheet-head">
+        <h2 id="formTitle">添加订阅</h2>
+        <button type="button" class="icon-btn" id="btnCloseForm" aria-label="关闭">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="subForm" class="form" novalidate>
+        <input type="hidden" id="fId" />
+        <label class="field">
+          <span>名称</span>
+          <input type="text" id="fName" required maxlength="48" placeholder="例如 ChatGPT Plus" autocomplete="off" />
+        </label>
+        <div class="field-row">
+          <label class="field grow">
+            <span>金额</span>
+            <input type="number" id="fAmount" required min="0" step="0.01" placeholder="0" />
+          </label>
+          <label class="field">
+            <span>币种</span>
+            <select id="fCurrency">
+              <option value="CNY">CNY</option>
+              <option value="USD">USD</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>周期</span>
+            <select id="fCycle">
+              <option value="weekly">周</option>
+              <option value="monthly" selected>月</option>
+              <option value="quarterly">季</option>
+              <option value="yearly">年</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field grow">
+            <span>下次扣款日</span>
+            <input type="date" id="fNext" required />
+          </label>
+          <label class="field grow">
+            <span>分类</span>
+            <select id="fCategory">
+              <option value="流媒体">流媒体</option>
+              <option value="AI工具">AI工具</option>
+              <option value="云服务">云服务</option>
+              <option value="效率">效率</option>
+              <option value="健身">健身</option>
+              <option value="新闻">新闻</option>
+              <option value="其他">其他</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field grow">
+            <span>试用结束日 <small>（可选）</small></span>
+            <input type="date" id="fTrial" />
+          </label>
+          <label class="field grow">
+            <span>状态</span>
+            <select id="fStatus">
+              <option value="active">活跃</option>
+              <option value="cancelled">已取消</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>取消页 URL <small>（可选）</small></span>
+          <input type="url" id="fCancelUrl" placeholder="https://…" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>备注 <small>（可选）</small></span>
+          <input type="text" id="fNote" maxlength="120" placeholder="家庭套餐 / 年付优惠…" autocomplete="off" />
+        </label>
+        <div class="form-actions">
+          <button type="button" class="btn-danger-ghost" id="btnDelete" hidden>删除</button>
+          <div class="form-actions-right">
+            <button type="button" class="btn-secondary" id="btnCancelForm">取消</button>
+            <button type="submit" class="btn-primary">保存</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Backup modal -->
+  <div class="overlay" id="backupOverlay" hidden>
+    <div class="sheet sheet-sm" role="dialog" aria-labelledby="backupTitle" aria-modal="true">
+      <div class="sheet-head">
+        <h2 id="backupTitle">备份与导入</h2>
+        <button type="button" class="icon-btn" id="btnCloseBackup" aria-label="关闭">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <p class="backup-desc">导出 JSON 到本机，换设备时再导入。不会上传到任何服务器。</p>
+      <div class="backup-actions">
+        <button type="button" class="btn-primary full" id="btnExport">导出备份</button>
+        <label class="btn-secondary full file-label">
+          导入备份
+          <input type="file" id="importFile" accept="application/json,.json" hidden />
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
